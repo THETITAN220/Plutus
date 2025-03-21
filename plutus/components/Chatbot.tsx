@@ -59,13 +59,13 @@ export default function Chatbot() {
     const response = await axios.post("api/intent", { value: command });
     console.log("Front resp: ", response.data);
 
-    const stool = await axios.post("api/tools", { value: response.data })
+    const ifTool = await axios.post("api/iftool", { value: response.data })
 
-    console.log("String tool:", stool);
+    console.log("If tool needed:", ifTool);
 
-    const tool = stool.data.tool;
+    const callTool = ifTool.data.tool;
 
-    console.log("Tool:", tool);
+    console.log("Tool:", callTool);
 
 
     let botResponse = '';
