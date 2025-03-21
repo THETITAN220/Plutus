@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { ethers } from "ethers";
 import axios from "axios";
-import { getStorageItem, setStorageItem, removeStorageItem} from "@/lib/localStorage";
+import { getStorageItem, setStorageItem, removeStorageItem } from "@/lib/localStorage";
 
 type Message = {
   type: 'user' | 'bot';
@@ -12,13 +12,6 @@ type Message = {
 };
 
 type WalletState = {
-  address: string;
-  privateKey?: string;
-  mnemonic?: string;
-  provider?: ethers.BrowserProvider;
-  signer?: ethers.JsonRpcSigner;
-  type: "default" | "metamask";
-} | null;
   address: string;
   privateKey?: string;
   mnemonic?: string;
