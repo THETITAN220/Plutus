@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
-import { connectToDb } from "@/lib/mongodb";
+import { connectToDatabase } from "@/lib/mongodb";
 import User from "@/models/User";
-import Profile from "@/models/Profile";
 import { generateSalt, hashPassword } from "@/utils/password";
 
 export async function POST(req: Request) {
   try {
     const { email, password, name, oauthProvider } = await req.json();
 
-    await connectToDb();
+    await connectToDatabase();
 
     // Check if the user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return NextResponse.json({ error: "User already exists" }, { status: 400 });
+      return NextResponse.json(
+        { error: "User already exists" },
+        { status: 400 }
+      );
     }
 
     let newUser;
@@ -41,19 +43,6 @@ export async function POST(req: Request) {
     }
 
     // Create a corresponding Profile for the new user
-    const newProfile = new Profile({
-      user: newUser._id,
-      email: newUser.email,
-      phoneNumber: "", // Default empty phone number
-      shippingAddress: {
-        street: "",
-        city: "",
-        zip: "",
-        country: "",
-      },
-      orders: [], // Initialize with an empty order array
-    });
-    await newProfile.save();
 
     return NextResponse.json(
       { message: "User and Profile created successfully", user: newUser },
@@ -61,6 +50,9 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
