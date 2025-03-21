@@ -5,6 +5,7 @@ import {generateWallet, getBalance, restoreWallet} from "@/utils/wallet"
 import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { ethers } from "ethers";
+import { getStorageItem, setStorageItem, removeStorageItem} from "@/lib/localStorage";
 
 type Message = {
   type: 'user' | 'bot';
@@ -12,21 +13,38 @@ type Message = {
 };
 
 type WalletState = {
-    address: string;
-    privateKey?: string;
-    mnemonic?: string;
-    provider?: ethers.BrowserProvider;
-    signer?: ethers.JsonRpcSigner;
-    type: "default" | "metamask";
-  } | null;
+  address: string;
+  privateKey?: string;
+  mnemonic?: string;
+  provider?: ethers.BrowserProvider;
+  signer?: ethers.JsonRpcSigner;
+  type: "default" | "metamask";
+} | null;
+
+const STORAGE_KEY = 'walletState';
 
 export default function Chatbot() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     { type: 'bot', text: 'Hello! I\'m Plutus, your crypto assistant. I can help you manage an Ethereum wallet. Type "create wallet" to get started.' }
   ]);
-  const [walletState, setWalletState] = useState<WalletState>({ address: "", type: "default" });
+  const [walletState, setWalletState] = useState<WalletState>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const storedWalletState = getStorageItem<WalletState>(STORAGE_KEY);
+    if (storedWalletState) {
+      setWalletState(storedWalletState);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (walletState) {
+      setStorageItem(STORAGE_KEY, walletState);
+    } else {
+      removeStorageItem(STORAGE_KEY);
+    }
+  }, [walletState]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -164,7 +182,6 @@ export default function Chatbot() {
     // Clear input
     setInput('');
   };
-
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
       <Head>
