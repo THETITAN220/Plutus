@@ -2,10 +2,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SchemaType } from "@google/generative-ai/server";
 import { NextRequest, NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.FLASH_API);
+const genAI = new GoogleGenerativeAI(process.env.FLASH_API_KEY);
 
 const schema = {
-  description: "List of user intent: classify it into Want transaction, Check balance",
+  description: "List of user intent: classify it into Want transaction, Check balance, Import wallet",
   type: SchemaType.OBJECT,
   properties: {
     intent: {
@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
   const { value } = await req.json();
   console.log(value);
   const result = await model.generateContent(value);
-  console.log("Result: \n", result);
-  console.log("Response:", result.response);
+  // console.log("Result: \n", result);
+  // console.log("Response:", result.response);
+  console.log("Response: ", result.response.text());
 
   return NextResponse.json(result.response.text());
 
