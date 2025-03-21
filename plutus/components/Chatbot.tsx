@@ -92,11 +92,12 @@ export default function Chatbot() {
   };
   
   const handleCommand = async (command: string) => {
-    
-    // Add user message
+
     setMessages((prev) => [...prev, { type: "user", text: command }])
     const intent = await axios.post("api/intent", { value: command })
-    console.log("Front resp: ", intent.data)
+    console.log("Front resp: ", intent.data);
+    const parsedIntent = JSON.parse(intent.data).intent;
+    console.log("Parsed resp: ", parsedIntent);
 
     const ifTool = await axios.post("api/iftool", { value: command, intent: intent.data })
 
@@ -114,7 +115,13 @@ export default function Chatbot() {
 
       setToolName(callTool.data.tool)
       setToolStatus(true)
-      setIsPopupOpen(true) // Open the popup
+      setIsPopupOpen(true)
+    }
+
+    if (parsedIntent === "General Query") {
+      const qRes = await axios.post("api/llm", { value: command });
+      console.log("qRes type: ", typeof (qRes.data));
+      setMessages((prev) => [...prev, { type: "bot", text: qRes.data }])
     }
 
     let botResponse = ""
@@ -261,40 +268,40 @@ export default function Chatbot() {
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" });
         setTranscribing(true);
-        
+
         try {
           // Send the audio blob to our API endpoint
           const formData = new FormData();
           formData.append("file", audioBlob, "audio.wav");
-          
+
           const response = await fetch("/api/sarvam", {
             method: "POST",
             body: formData,
           });
-          
+
           if (!response.ok) throw new Error("Transcription failed");
-          
+
           const data = await response.json();
-          
+
           if (data.transcript) {
             // Process the recognized text as a command
             handleCommand(data.transcript);
           } else {
-            setMessages(prev => [...prev, { 
-              type: 'bot', 
-              text: 'Sorry, I couldn\'t understand the audio. Please try again or type your command.' 
+            setMessages(prev => [...prev, {
+              type: 'bot',
+              text: 'Sorry, I couldn\'t understand the audio. Please try again or type your command.'
             }]);
           }
         } catch (error) {
           console.error("Error processing audio:", error);
-          setMessages(prev => [...prev, { 
-            type: 'bot', 
-            text: 'Sorry, there was an error processing your voice command. Please try again.' 
+          setMessages(prev => [...prev, {
+            type: 'bot',
+            text: 'Sorry, there was an error processing your voice command. Please try again.'
           }]);
         } finally {
           setTranscribing(false);
         }
-        
+
         // Clean up the media stream
         if (stream) {
           stream.getTracks().forEach(track => track.stop());
@@ -305,9 +312,9 @@ export default function Chatbot() {
       setIsRecording(true);
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      setMessages(prev => [...prev, { 
-        type: 'bot', 
-        text: 'Could not access the microphone. Please check your browser permissions and try again.' 
+      setMessages(prev => [...prev, {
+        type: 'bot',
+        text: 'Could not access the microphone. Please check your browser permissions and try again.'
       }]);
     }
   };
@@ -498,18 +505,17 @@ export default function Chatbot() {
                 </svg>
               </button>
             </form>
-            
+
             <div className="mt-3 flex justify-center">
               <button
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={transcribing}
-                className={`px-4 py-2 rounded-full flex items-center ${
-                  isRecording 
-                    ? "bg-red-500 text-white" 
-                    : transcribing
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                } transition-all duration-200`}
+                className={`px-4 py-2 rounded-full flex items-center ${isRecording
+                  ? "bg-red-500 text-white"
+                  : transcribing
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  } transition-all duration-200`}
               >
                 {transcribing ? (
                   <>
@@ -521,21 +527,21 @@ export default function Chatbot() {
                   </>
                 ) : (
                   <>
-                    <svg 
-                      xmlns="http://www.w3.org/2000/svg" 
-                      className="h-5 w-5 mr-2" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 mr-2"
+                      fill="none"
+                      viewBox="0 0 24 24"
                       stroke="currentColor"
                     >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d={isRecording 
-                          ? "M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" 
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d={isRecording
+                          ? "M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
                           : "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                        } 
+                        }
                       />
                     </svg>
                     {isRecording ? "Stop Recording" : "Start Recording"}

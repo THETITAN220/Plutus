@@ -10,7 +10,7 @@ const schema = {
   properties: {
     tool: {
       type: SchemaType.STRING,
-      description: "Return name of the tool being called (I am giving exact names of the tools return those): CheckBalance, SendETH, ImportWallet",
+      description: "Return name of the tool being called (I am giving exact names of the tools return those): CheckBalance, SendETH, ImportWallet, CryptoChart",
       nullable: false,
     },
   },
