@@ -56,9 +56,10 @@ export default function CryptoChart({ coin }: { coin: string }) {
   );
 
   useEffect(() => {
-    if (data?.Data?.length > 1) {
-      const firstPrice = data.Data[0].close;
-      const lastPrice = data.Data[data.Data.length - 1].close;
+    if (data?.Data?.Data?.length > 1) {
+      const priceData = data.Data.Data;
+      const firstPrice = priceData[0].close;
+      const lastPrice = priceData[priceData.length - 1].close;
       const change = lastPrice - firstPrice;
       const percentChange = (change / firstPrice) * 100;
 
@@ -80,7 +81,7 @@ export default function CryptoChart({ coin }: { coin: string }) {
       </div>
     );
 
-  if (!data)
+  if (!data || !data.Data || !data.Data.Data)
     return (
       <div className="flex flex-col justify-center items-center h-64 bg-gray-50 rounded-lg border border-gray-200">
         <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500"></div>
@@ -90,16 +91,39 @@ export default function CryptoChart({ coin }: { coin: string }) {
       </div>
     );
 
-  const labels = data.Data.map((entry: any) =>
-    timeRange === "24h"
-      ? new Date(entry.time * 1000).toLocaleTimeString([], {
+  const formatXAxisLabel = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+
+    switch (timeRange) {
+      case "24h":
+        return date.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
-        })
-      : new Date(entry.time * 1000).toLocaleDateString()
-  );
+        });
+      case "7d":
+        return date.toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+        });
+      case "30d":
+      case "90d":
+        return date.toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+        });
+      case "1y":
+        return date.toLocaleDateString([], {
+          month: "short",
+          year: "2-digit",
+        });
+      default:
+        return date.toLocaleDateString();
+    }
+  };
 
-  const prices = data.Data.map((entry: any) => entry.close);
+  const priceData = data.Data.Data;
+  const labels = priceData.map((entry: any) => formatXAxisLabel(entry.time));
+  const prices = priceData.map((entry: any) => entry.close);
   const currentPrice = prices[prices.length - 1];
 
   // Determine color based on price trend
@@ -131,6 +155,24 @@ export default function CryptoChart({ coin }: { coin: string }) {
     ],
   };
 
+  // Calculate appropriate number of x-axis ticks based on time range
+  const getMaxTicksLimit = () => {
+    switch (timeRange) {
+      case "24h":
+        return 6;
+      case "7d":
+        return 7;
+      case "30d":
+        return 10;
+      case "90d":
+        return 12;
+      case "1y":
+        return 12;
+      default:
+        return 8;
+    }
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -152,6 +194,27 @@ export default function CryptoChart({ coin }: { coin: string }) {
         },
         displayColors: false,
         callbacks: {
+          title: function (tooltipItems: any) {
+            const idx = tooltipItems[0].dataIndex;
+            const timestamp = priceData[idx].time;
+            const date = new Date(timestamp * 1000);
+
+            if (timeRange === "24h") {
+              return date.toLocaleString([], {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+            } else {
+              return date.toLocaleDateString([], {
+                weekday: "short",
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
+            }
+          },
           label: function (context: any) {
             return `$${context.raw.toLocaleString("en-US", {
               minimumFractionDigits: 2,
@@ -167,7 +230,7 @@ export default function CryptoChart({ coin }: { coin: string }) {
           display: false,
         },
         ticks: {
-          maxTicksLimit: 8,
+          maxTicksLimit: getMaxTicksLimit(),
           font: {
             size: 11,
           },
