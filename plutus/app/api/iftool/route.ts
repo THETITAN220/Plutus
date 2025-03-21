@@ -31,14 +31,12 @@ export async function POST(req: NextRequest) {
   console.log("Value: ", value);
   console.log("Intenttt: ", intent);
 
-  // Regex-based key detection (example)
-  const keyPattern = /<key>\s*\w+/i; // Adjust regex as needed
+  const keyPattern = /<key>\s*\w+/i;
   const hasKeys = keyPattern.test(value);
   console.log(JSON.parse(intent))
   const isGen = JSON.parse(intent).intent === "General Query";
   console.log("Is gen: ", isGen);
 
-  // Enhanced prompting
   const enhancedValue = `Determine if a tool is needed based on the presence of key variables (like private keys) in the following query: "${value}" Do not do a tool calling if its a general query.`;
 
   const result = await model.generateContent(enhancedValue);
@@ -46,10 +44,11 @@ export async function POST(req: NextRequest) {
   const responseText = result.response.text();
   const jsonData = JSON.parse(responseText);
 
-  // Override Gemini's response if regex detects keys
   if (hasKeys || isGen) {
-    jsonData.detectTool = false; // Override to false if keys are found
+    jsonData.detectTool = false;
   }
+
+  console.log("Force detect tool: ", jsonData.detectTool);
 
   return NextResponse.json(jsonData);
 }
