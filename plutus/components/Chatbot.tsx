@@ -50,11 +50,8 @@ export default function Chatbot() {
     } else {
       removeStorageItem(STORAGE_KEY)
     }
-  }, [walletState])
-    { type: 'bot', text: 'Hello! I\'m Plutus, your crypto assistant. I can help you manage an Ethereum wallet. Type "create wallet" to get started.' }
-  ]);
-  const [walletState, setWalletState] = useState<WalletState>({ address: "", type: "default" });
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  }, [walletState]);
+
 
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
