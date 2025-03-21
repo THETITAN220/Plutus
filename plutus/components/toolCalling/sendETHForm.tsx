@@ -1,4 +1,4 @@
-export default function sendETHForm() {
+export default function SendETH() {
     return(
         <>
              <div className="flex flex-col items-center justify-center bg-gray-100">

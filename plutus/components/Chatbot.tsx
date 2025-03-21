@@ -1,195 +1,168 @@
-// pages/index.tsx
-
-"use client";
-import { generateWallet, getBalance, restoreWallet } from "@/utils/wallet";
-import { useState, useRef, useEffect } from "react";
-import Head from "next/head";
-import { ethers } from "ethers";
-// import { useSession } from "next-auth/react";
-// import { useRouter } from "next/router";
-
+"use client"
+import { generateWallet, getBalance, restoreWallet } from "@/utils/wallet"
+import { useState, useRef, useEffect } from "react"
+import Head from "next/head"
+import type { ethers } from "ethers"
+import axios from "axios"
+import { getStorageItem, setStorageItem, removeStorageItem } from "@/lib/localStorage"
+import ToolDecider from "./ToolDecider"
+import Popup from "./popup"
 type Message = {
-  type: "user" | "bot";
-  text: string;
-};
+  type: "user" | "bot"
+  text: string
+}
 
 type WalletState = {
-  address: string;
-  privateKey?: string;
-  mnemonic?: string;
-  provider?: ethers.BrowserProvider;
-  signer?: ethers.JsonRpcSigner;
-  type: "default" | "metamask";
-} | null;
-  
+  address: string
+  privateKey?: string
+  mnemonic?: string
+  provider?: ethers.BrowserProvider
+  signer?: ethers.JsonRpcSigner
+  type: "default" | "metamask"
+} | null
 
-const STORAGE_KEY = 'walletState';
+const STORAGE_KEY = "walletState"
 
 export default function Chatbot() {
-  const [input, setInput] = useState("");
-  // const { status } = useSession();
-  // const router = useRouter();
-  // useEffect(() => {
-  //   if (router.isReady && status === "unauthenticated") {
-  //     router.push("/signin");
-  //   }
-  // }, [status, router]);
+  const [input, setInput] = useState("")
   const [messages, setMessages] = useState<Message[]>([
     {
       type: "bot",
       text: 'Hello! I\'m Plutus, your crypto assistant. I can help you manage an Ethereum wallet. Type "create wallet" to get started.',
     },
-  ]);
-  const [walletState, setWalletState] = useState<WalletState>({
-    address: "",
-    type: "default",
-  });
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  ])
+  const [toolStatus, setToolStatus] = useState(false)
+  const [walletState, setWalletState] = useState<WalletState>(null)
+  const [toolName, setToolName] = useState("")
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [isPopupOpen, setIsPopupOpen] = useState(false)
 
   useEffect(() => {
-    const storedWalletState = getStorageItem<WalletState>(STORAGE_KEY);
+    const storedWalletState = getStorageItem<WalletState>(STORAGE_KEY)
     if (storedWalletState) {
-      setWalletState(storedWalletState);
+      setWalletState(storedWalletState)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     if (walletState) {
-      setStorageItem(STORAGE_KEY, walletState);
+      setStorageItem(STORAGE_KEY, walletState)
     } else {
-      removeStorageItem(STORAGE_KEY);
+      removeStorageItem(STORAGE_KEY)
     }
-  }, [walletState]);
+  }, [walletState])
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    scrollToBottom()
+  }, [messages])
 
   const handleCommand = async (command: string) => {
     // Add user message
-    setMessages(prev => [...prev, { type: 'user', text: command }]);
-    const response = await axios.post("api/intent", { value: command });
-    console.log("Front resp: ", response.data);
+    setMessages((prev) => [...prev, { type: "user", text: command }])
+    const intent = await axios.post("api/intent", { value: command })
+    console.log("Front resp: ", intent.data)
 
-    const ifTool = await axios.post("api/iftool", { value: response.data })
+    const ifTool = await axios.post("api/iftool", { value: command, intent: intent.data })
 
-    console.log("If tool needed:", ifTool);
+    console.log("If tool needed:", ifTool)
 
-    const callTool = ifTool.data.tool;
+    const boolTool = ifTool.data
 
-    console.log("Tool:", callTool);
+    console.log("Tool:", boolTool)
 
+    if (boolTool.detectTool == true) {
+      const callTool = await axios.post("api/tools", { value: command })
+      // const calltool = JSON.stringify(callTool.data);
+      console.log("Called tool: ", callTool.data.tool)
+      console.log("Called tool: ", typeof callTool.data.tool)
 
-    let botResponse = '';
-    const lowerCommand = command.toLowerCase();
+      setToolName(callTool.data.tool)
+      setToolStatus(true)
+      setIsPopupOpen(true) // Open the popup
+    }
+
+    let botResponse = ""
+    const lowerCommand = command.toLowerCase()
 
     try {
       // Handle different commands
-      if (
-        lowerCommand.includes("create wallet") ||
-        lowerCommand.includes("new wallet")
-      ) {
+      if (lowerCommand.includes("create wallet") || lowerCommand.includes("new wallet")) {
         try {
-          const walletData = await generateWallet();
-
+          const walletData = await generateWallet()
 
           if (walletData && walletData.address) {
             setWalletState({
               address: walletData.address,
               privateKey: walletData.privateKey,
               type: "default",
-            });
+            })
 
-
-            botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!`;
+            botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!`
           } else {
-            botResponse = "Failed to create wallet: Unknown error";
+            botResponse = "Failed to create wallet: Unknown error"
           }
         } catch (error) {
-          botResponse = `Failed to create wallet: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`;
+          botResponse = `Failed to create wallet: ${error instanceof Error ? error.message : "Unknown error"}`
         }
-      } else if (
-        lowerCommand.includes("import wallet") &&
-        lowerCommand.includes("key")
-      ) {
+      } else if (lowerCommand.includes("import wallet") && lowerCommand.includes("key")) {
         // Extract private key - very basic implementation
-        const keyMatch = command.match(/key\s+([0-9a-fx]+)/i);
+        const keyMatch = command.match(/key\s+([0-9a-fx]+)/i)
         if (!keyMatch || !keyMatch[1]) {
-          botResponse =
-            "Please provide a private key in the format: import wallet key YOUR_PRIVATE_KEY";
+          botResponse = "Please provide a private key in the format: import wallet key YOUR_PRIVATE_KEY"
         } else {
-          const privateKey = keyMatch[1];
-
+          const privateKey = keyMatch[1]
 
           try {
-            const walletData = await restoreWallet(privateKey);
-
+            const walletData = await restoreWallet(privateKey)
 
             if (walletData && walletData.address) {
               setWalletState({
                 address: walletData.address,
                 privateKey: privateKey,
                 type: "default",
-              });
+              })
 
-
-              botResponse = `Wallet imported!\nAddress: ${walletData.address}`;
+              botResponse = `Wallet imported!\nAddress: ${walletData.address}`
             } else {
-              botResponse = "Failed to import wallet: Invalid private key";
+              botResponse = "Failed to import wallet: Invalid private key"
             }
           } catch (error) {
-            botResponse = `Failed to import wallet: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`;
+            botResponse = `Failed to import wallet: ${error instanceof Error ? error.message : "Unknown error"}`
           }
         }
-      } else if (
-        lowerCommand.includes("balance") ||
-        lowerCommand.includes("how much")
-      ) {
+      } else if (lowerCommand.includes("balance") || lowerCommand.includes("how much")) {
         if (!walletState?.address) {
-          botResponse = "Please create or import a wallet first.";
+          botResponse = "Please create or import a wallet first."
         } else {
           try {
-            const balanceData = await getBalance(walletState.address);
-
+            const balanceData = await getBalance(walletState.address)
 
             if (balanceData !== undefined) {
-              botResponse = `Current balance: ${balanceData} ETH`;
+              botResponse = `Current balance: ${balanceData} ETH`
             } else {
-              botResponse = "Failed to get balance: Unknown error";
+              botResponse = "Failed to get balance: Unknown error"
             }
           } catch (error) {
-            botResponse = `Failed to get balance: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`;
+            botResponse = `Failed to get balance: ${error instanceof Error ? error.message : "Unknown error"}`
           }
         }
-      } else if (
-        lowerCommand.includes("send") ||
-        lowerCommand.includes("transfer")
-      ) {
+      } else if (lowerCommand.includes("send") || lowerCommand.includes("transfer")) {
         if (!walletState?.address || !walletState?.privateKey) {
-          botResponse = "Please create or import a wallet first.";
+          botResponse = "Please create or import a wallet first."
         } else {
           // Very basic parsing - in a real app, use a more robust approach
-          const toMatch = command.match(/to\s+(0x[a-f0-9]{40})/i);
-          const amountMatch = command.match(/(\d+\.?\d*)\s*eth/i);
-
+          const toMatch = command.match(/to\s+(0x[a-f0-9]{40})/i)
+          const amountMatch = command.match(/(\d+\.?\d*)\s*eth/i)
 
           if (!toMatch || !amountMatch) {
-            botResponse =
-              "Please specify recipient and amount in the format: send 0.1 ETH to 0x...";
+            botResponse = "Please specify recipient and amount in the format: send 0.1 ETH to 0x..."
           } else {
-            const to = toMatch[1];
-            const amount = amountMatch[1];
-
+            const to = toMatch[1]
+            const amount = amountMatch[1]
 
             try {
               const response = await fetch("/api/sendTx", {
@@ -201,59 +174,48 @@ export default function Chatbot() {
                   to: to,
                   amount: amount,
                 }),
-              });
+              })
 
-
-              const result = await response.json();
-
+              const result = await response.json()
 
               if (result.success) {
-                botResponse = `Transaction sent!\nAmount: ${amount} ETH\nTo: ${to}\nTransaction Hash: ${result.txHash}`;
+                botResponse = `Transaction sent!\nAmount: ${amount} ETH\nTo: ${to}\nTransaction Hash: ${result.txHash}`
               } else {
-                botResponse = `Failed to send transaction: ${
-                  result.error || "Unknown error"
-                }`;
+                botResponse = `Failed to send transaction: ${result.error || "Unknown error"}`
               }
             } catch (error) {
-              botResponse = `Failed to send transaction: ${
-                error instanceof Error ? error.message : "Unknown error"
-              }`;
+              botResponse = `Failed to send transaction: ${error instanceof Error ? error.message : "Unknown error"}`
             }
           }
         }
       } else if (lowerCommand.includes("help")) {
         botResponse =
-          "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message";
+          "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message"
       } else {
-        botResponse = `I didn't understand that command. Type "help" to see available commands.`;
+        botResponse = `I didn't understand that command. Type "help" to see available commands.`
       }
     } catch (error) {
-      console.error("Error handling command:", error);
-      botResponse = "Something went wrong. Please try again.";
+      console.error("Error handling command:", error)
+      botResponse = "Something went wrong. Please try again."
     }
 
     // Add bot response
-    setMessages((prev) => [...prev, { type: "bot", text: botResponse }]);
+    setMessages((prev) => [...prev, { type: "bot", text: botResponse }])
 
     // Clear input
-    setInput("");
-  };
+    setInput("")
+  }
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
       <Head>
         <title>Plutus | Ethereum Wallet Assistant</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin=""
-        />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
           href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </Head>
-
 
       <main className="flex-grow flex flex-col max-w-4xl mx-auto w-full p-4 font-['Poppins']">
         <div className="flex items-center justify-between mb-6">
@@ -281,7 +243,6 @@ export default function Chatbot() {
           <div className="text-sm text-gray-500">Ethereum Wallet Assistant</div>
         </div>
 
-
         {walletState?.address && (
           <div className="bg-white p-4 rounded-xl shadow-md mb-6 border-l-4 border-orange-500 transition-all hover:shadow-lg">
             <div className="flex items-center">
@@ -303,14 +264,11 @@ export default function Chatbot() {
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">ACTIVE WALLET</p>
-                <p className="text-sm font-mono text-gray-800 break-all">
-                  {walletState.address}
-                </p>
+                <p className="text-sm font-mono text-gray-800 break-all">{walletState.address}</p>
               </div>
             </div>
           </div>
         )}
-
 
         <div className="flex-grow bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-orange-100">
           <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3 text-white flex items-center">
@@ -333,13 +291,9 @@ export default function Chatbot() {
             <span className="font-medium">Chat with Plutus</span>
           </div>
 
-
           <div className="flex-grow overflow-y-auto p-4 bg-gradient-to-b from-orange-50/50 to-transparent">
             {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`mb-4 ${msg.type === "user" ? "text-right" : ""}`}
-              >
+              <div key={idx} className={`mb-4 ${msg.type === "user" ? "text-right" : ""}`}>
                 <div className="inline-flex items-start max-w-[80%]">
                   {msg.type === "bot" && (
                     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mr-2 mt-1 shadow-sm flex-shrink-0">
@@ -361,15 +315,12 @@ export default function Chatbot() {
                   )}
 
                   <div
-                    className={`px-4 py-3 rounded-xl shadow-sm ${
-                      msg.type === "user"
-                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-tr-none"
-                        : "bg-white border border-gray-200 text-gray-800 rounded-tl-none"
-                    }`}
+                    className={`px-4 py-3 rounded-xl shadow-sm ${msg.type === "user"
+                      ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-tr-none"
+                      : "bg-white border border-gray-200 text-gray-800 rounded-tl-none"
+                      }`}
                   >
-                    <pre className="whitespace-pre-wrap font-sans text-sm">
-                      {msg.text}
-                    </pre>
+                    <pre className="whitespace-pre-wrap font-sans text-sm">{msg.text}</pre>
                   </div>
 
                   {msg.type === "user" && (
@@ -396,15 +347,11 @@ export default function Chatbot() {
             <div ref={messagesEndRef} />
           </div>
 
-
           <div className="border-t p-3 bg-white">
             <form
               onSubmit={(e) => {
-                e.preventDefault();
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (input.trim()) handleCommand(input);
+                e.preventDefault()
+                if (input.trim()) handleCommand(input)
               }}
               className="flex"
             >
@@ -415,7 +362,6 @@ export default function Chatbot() {
                 placeholder="Type a command or ask for help..."
                 className="flex-grow border border-gray-200 text-black rounded-l-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
-              <button
               <button
                 type="submit"
                 className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-5 py-3 rounded-r-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all duration-200 flex items-center justify-center"
@@ -438,7 +384,10 @@ export default function Chatbot() {
             </form>
           </div>
         </div>
-
+        {/* Tool Popup */}
+        <Popup isOpen={isPopupOpen && toolStatus} onClose={() => setIsPopupOpen(false)}>
+          <ToolDecider tools={toolName} />
+        </Popup>
 
         <div className="mt-6 bg-white p-3 rounded-xl shadow-sm border border-orange-100">
           <div className="flex items-center text-sm text-gray-500">
@@ -458,14 +407,11 @@ export default function Chatbot() {
                 />
               </svg>
             </div>
-            <p>
-              Try saying "create wallet", "check balance", or "help" to see all
-              commands
-            </p>
+            <p>Try saying "create wallet", "check balance", or "help" to see all commands</p>
           </div>
         </div>
       </main>
     </div>
-  );
+  )
 }
 
