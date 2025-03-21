@@ -1,10 +1,9 @@
-// pages/index.tsx
-
 "use client"
-import {generateWallet, getBalance, restoreWallet} from "@/utils/wallet"
+import { generateWallet, getBalance, restoreWallet } from "@/utils/wallet"
 import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { ethers } from "ethers";
+import axios from "axios";
 import { getStorageItem, setStorageItem, removeStorageItem} from "@/lib/localStorage";
 
 type Message = {
@@ -13,6 +12,13 @@ type Message = {
 };
 
 type WalletState = {
+  address: string;
+  privateKey?: string;
+  mnemonic?: string;
+  provider?: ethers.BrowserProvider;
+  signer?: ethers.JsonRpcSigner;
+  type: "default" | "metamask";
+} | null;
   address: string;
   privateKey?: string;
   mnemonic?: string;
@@ -57,7 +63,18 @@ export default function Chatbot() {
   const handleCommand = async (command: string) => {
     // Add user message
     setMessages(prev => [...prev, { type: 'user', text: command }]);
-    
+    const response = await axios.post("api/intent", { value: command });
+    console.log("Front resp: ", response.data);
+
+    const stool = await axios.post("api/tools", { value: response.data })
+
+    console.log("String tool:", stool);
+
+    const tool = stool.data.tool;
+
+    console.log("Tool:", tool);
+
+
     let botResponse = '';
     const lowerCommand = command.toLowerCase();
 
@@ -66,14 +83,14 @@ export default function Chatbot() {
       if (lowerCommand.includes('create wallet') || lowerCommand.includes('new wallet')) {
         try {
           const walletData = await generateWallet();
-          
+
           if (walletData && walletData.address) {
             setWalletState({
               address: walletData.address,
               privateKey: walletData.privateKey,
               type: "default"
             });
-            
+
             botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!`;
           } else {
             botResponse = 'Failed to create wallet: Unknown error';
@@ -81,7 +98,7 @@ export default function Chatbot() {
         } catch (error) {
           botResponse = `Failed to create wallet: ${error instanceof Error ? error.message : 'Unknown error'}`;
         }
-      } 
+      }
       else if (lowerCommand.includes('import wallet') && lowerCommand.includes('key')) {
         // Extract private key - very basic implementation
         const keyMatch = command.match(/key\s+([0-9a-fx]+)/i);
@@ -89,17 +106,17 @@ export default function Chatbot() {
           botResponse = 'Please provide a private key in the format: import wallet key YOUR_PRIVATE_KEY';
         } else {
           const privateKey = keyMatch[1];
-          
+
           try {
             const walletData = await restoreWallet(privateKey);
-            
+
             if (walletData && walletData.address) {
               setWalletState({
                 address: walletData.address,
                 privateKey: privateKey,
                 type: "default"
               });
-              
+
               botResponse = `Wallet imported!\nAddress: ${walletData.address}`;
             } else {
               botResponse = 'Failed to import wallet: Invalid private key';
@@ -115,7 +132,7 @@ export default function Chatbot() {
         } else {
           try {
             const balanceData = await getBalance(walletState.address);
-            
+
             if (balanceData !== undefined) {
               botResponse = `Current balance: ${balanceData} ETH`;
             } else {
@@ -133,13 +150,13 @@ export default function Chatbot() {
           // Very basic parsing - in a real app, use a more robust approach
           const toMatch = command.match(/to\s+(0x[a-f0-9]{40})/i);
           const amountMatch = command.match(/(\d+\.?\d*)\s*eth/i);
-          
+
           if (!toMatch || !amountMatch) {
             botResponse = 'Please specify recipient and amount in the format: send 0.1 ETH to 0x...';
           } else {
             const to = toMatch[1];
             const amount = amountMatch[1];
-            
+
             try {
               const response = await fetch("/api/sendTx", {
                 method: "POST",
@@ -151,9 +168,9 @@ export default function Chatbot() {
                   amount: amount,
                 }),
               });
-              
+
               const result = await response.json();
-              
+
               if (result.success) {
                 botResponse = `Transaction sent!\nAmount: ${amount} ETH\nTo: ${to}\nTransaction Hash: ${result.txHash}`;
               } else {
@@ -178,7 +195,7 @@ export default function Chatbot() {
 
     // Add bot response
     setMessages(prev => [...prev, { type: 'bot', text: botResponse }]);
-    
+
     // Clear input
     setInput('');
   };
@@ -190,7 +207,7 @@ export default function Chatbot() {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </Head>
-      
+
       <main className="flex-grow flex flex-col max-w-4xl mx-auto w-full p-4 font-['Poppins']">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
@@ -203,7 +220,7 @@ export default function Chatbot() {
           </div>
           <div className="text-sm text-gray-500">Ethereum Wallet Assistant</div>
         </div>
-        
+
         {walletState?.address && (
           <div className="bg-white p-4 rounded-xl shadow-md mb-6 border-l-4 border-orange-500 transition-all hover:shadow-lg">
             <div className="flex items-center">
@@ -219,7 +236,7 @@ export default function Chatbot() {
             </div>
           </div>
         )}
-        
+
         <div className="flex-grow bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-orange-100">
           <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3 text-white flex items-center">
             <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center mr-3">
@@ -229,11 +246,11 @@ export default function Chatbot() {
             </div>
             <span className="font-medium">Chat with Plutus</span>
           </div>
-          
+
           <div className="flex-grow overflow-y-auto p-4 bg-gradient-to-b from-orange-50/50 to-transparent">
             {messages.map((msg, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className={`mb-4 ${msg.type === 'user' ? 'text-right' : ''}`}
               >
                 <div className="inline-flex items-start max-w-[80%]">
@@ -244,17 +261,16 @@ export default function Chatbot() {
                       </svg>
                     </div>
                   )}
-                  
-                  <div 
-                    className={`px-4 py-3 rounded-xl shadow-sm ${
-                      msg.type === 'user' 
-                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-tr-none' 
-                        : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
-                    }`}
+
+                  <div
+                    className={`px-4 py-3 rounded-xl shadow-sm ${msg.type === 'user'
+                      ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-tr-none'
+                      : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                      }`}
                   >
                     <pre className="whitespace-pre-wrap font-sans text-sm">{msg.text}</pre>
                   </div>
-                  
+
                   {msg.type === 'user' && (
                     <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center ml-2 mt-1 shadow-sm flex-shrink-0">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -267,11 +283,11 @@ export default function Chatbot() {
             ))}
             <div ref={messagesEndRef} />
           </div>
-          
+
           <div className="border-t p-3 bg-white">
-            <form 
-              onSubmit={(e) => { 
-                e.preventDefault(); 
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
                 if (input.trim()) handleCommand(input);
               }}
               className="flex"
@@ -283,7 +299,7 @@ export default function Chatbot() {
                 placeholder="Type a command or ask for help..."
                 className="flex-grow border border-gray-200 text-black rounded-l-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
-              <button 
+              <button
                 type="submit"
                 className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-5 py-3 rounded-r-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all duration-200 flex items-center justify-center"
               >
@@ -294,7 +310,7 @@ export default function Chatbot() {
             </form>
           </div>
         </div>
-        
+
         <div className="mt-6 bg-white p-3 rounded-xl shadow-sm border border-orange-100">
           <div className="flex items-center text-sm text-gray-500">
             <div className="mr-2 text-orange-500">
