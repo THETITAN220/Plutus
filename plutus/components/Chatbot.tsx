@@ -2,7 +2,7 @@
 import { generateWallet, getBalance, restoreWallet } from "@/utils/wallet"
 import { useState, useRef, useEffect } from "react"
 import Head from "next/head"
-import type { ethers } from "ethers"
+import { ethers } from "ethers"
 import axios from "axios"
 import { getStorageItem, setStorageItem, removeStorageItem } from "@/lib/localStorage"
 import ToolDecider from "./ToolDecider"
@@ -66,30 +66,45 @@ export default function Chatbot() {
       removeStorageItem(STORAGE_KEY)
     }
   }, [walletState]);
-  const fetchTransactions = async () => {
-    if (!walletState?.address) {
-      setMessages((prev) => [...prev, { type: "bot", text: "Please create or import a wallet first." }]);
-      return;
+ // In your fetchTransactions function, replace it with this:
+
+const fetchTransactions = async () => {
+  if (!walletState?.address) {
+    setMessages((prev) => [...prev, { type: "bot", text: "Please create or import a wallet first." }]);
+    return;
+  }
+
+  try {
+    const response = await axios.get(`/api/transactions?address=${walletState.address}`);
+    const transactions = response.data.result;
+
+    if (transactions.length === 0) {
+      setMessages((prev) => [...prev, { type: "bot", text: "No transactions found." }]);
+    } else {
+      let message = "Recent Transactions:\n";
+      transactions.slice(0, 5).forEach((tx, index) => {
+        // Format the value manually since ethers is not available
+        // Convert from wei (10^18) to ETH
+        const valueInWei = BigInt(tx.value);
+        const valueInEth = Number(valueInWei) / 1000000000000000000;
+        
+        // Format the timestamp to a readable date
+        const date = new Date(Number(tx.timeStamp) * 1000).toLocaleString();
+        
+        message += `#${index + 1} [${date}]\n`;
+        message += `Tx: ${tx.hash}\n`;
+        message += `From: ${tx.from}\n`;
+        message += `To: ${tx.to}\n`;
+        message += `Value: ${valueInEth.toFixed(6)} ETH\n\n`;
+      });
+
+      setMessages((prev) => [...prev, { type: "bot", text: message }]);
     }
-  
-    try {
-      const response = await axios.get(`/api/transactions?address=${walletState.address}`);
-      const transactions = response.data.result;
-  
-      if (transactions.length === 0) {
-        setMessages((prev) => [...prev, { type: "bot", text: "No transactions found." }]);
-      } else {
-        let message = "Recent Transactions:\n";
-        transactions.slice(0, 5).forEach((tx, index) => {
-          message += `#${index + 1} Tx: ${tx.hash}\nFrom: ${tx.from}\nTo: ${tx.to}\nValue: ${ethers.utils.formatEther(tx.value)} ETH\n\n`;
-        });
-  
-        setMessages((prev) => [...prev, { type: "bot", text: message }]);
-      }
-    } catch (error) {
-      setMessages((prev) => [...prev, { type: "bot", text: "Failed to fetch transactions." }]);
-    }
-  };
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    setMessages((prev) => [...prev, { type: "bot", text: "Failed to fetch transactions: " + (error instanceof Error ? error.message : "Unknown error") }]);
+  }
+};
   
   const handleCommand = async (command: string) => {
 
