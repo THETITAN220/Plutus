@@ -4,7 +4,7 @@ export async function GET(
   req: Request,
   { params }: { params: { coin: string } }
 ) {
-  const { coin } = params;
+  const { coin } = await Promise.resolve(params);
   const url = new URL(req.url);
   const range = url.searchParams.get("range") || "7d";
   const API_KEY = process.env.CRYPTOCOMPARE_API_KEY;

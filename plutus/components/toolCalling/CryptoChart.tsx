@@ -13,6 +13,7 @@ import {
   Filler,
 } from "chart.js";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 
@@ -38,13 +39,22 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y";
 
-export default function CryptoChart({ coin }: { coin: string }) {
+export default function CryptoChart({ coin }: { coin: string | undefined }) {
+  const router = useRouter();
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [priceChange, setPriceChange] = useState<{
     value: number;
     percent: number;
   }>({ value: 0, percent: 0 });
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  if (!coin) {
+    return (
+      <div className="text-gray-500 text-center p-4 rounded-lg bg-gray-50 border border-gray-200">
+        Please select a cryptocurrency.
+      </div>
+    );
+  }
 
   const { data, error, mutate } = useSWR(
     `/api/crypto/${coin}?range=${timeRange}`,
@@ -283,9 +293,8 @@ export default function CryptoChart({ coin }: { coin: string }) {
               })}
             </span>
             <div
-              className={`flex items-center ${
-                priceChange.percent >= 0 ? "text-green-500" : "text-red-500"
-              }`}
+              className={`flex items-center ${priceChange.percent >= 0 ? "text-green-500" : "text-red-500"
+                }`}
             >
               {priceChange.percent >= 0 ? (
                 <ArrowUp size={16} />
@@ -317,11 +326,10 @@ export default function CryptoChart({ coin }: { coin: string }) {
           <button
             key={range}
             onClick={() => setTimeRange(range)}
-            className={`px-3 py-1 text-sm rounded-full transition-colors ${
-              timeRange === range
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+            className={`px-3 py-1 text-sm rounded-full transition-colors ${timeRange === range
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
           >
             {range}
           </button>
@@ -331,6 +339,13 @@ export default function CryptoChart({ coin }: { coin: string }) {
       <div className="h-64">
         <Line data={chartData} options={chartOptions} />
       </div>
+      <button
+        onClick={() => router.push("/")}
+        className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+        title="Close Chart"
+      >
+        X
+      </button>
     </div>
   );
 }

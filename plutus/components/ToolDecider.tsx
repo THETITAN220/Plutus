@@ -2,6 +2,7 @@ import { on } from "node:events";
 import CheckBalanceForm from "./toolCalling/checkBalanceForm";
 import ImportWalletForm from "./toolCalling/importWalletForm";
 import SendETHForm from "./toolCalling/sendETHForm";
+import GraphBtn from "./toolCalling/GraphBtn";
 
 interface ToolDeciderProps {
   tools: string;
@@ -24,10 +25,16 @@ export default function ToolDecider({ tools, onWalletImported, onPaymentSuccess 
           <ImportWalletForm onWalletImported={onWalletImported} />
         </div>
       );
+    case "CryptoChart":
+      return (
+        <div>
+          <GraphBtn/>
+        </div>
+      );
     default:
       return (
         <div>
-          <SendETHForm onPaymentSuccess={onPaymentSuccess}/>
+          <SendETHForm onPaymentSuccess={onPaymentSuccess} />
         </div>
       );
   }
