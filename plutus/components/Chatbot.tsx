@@ -529,8 +529,6 @@ export default function Chatbot() {
       } else if (lowerCommand.includes("help")) {
         botResponse =
           "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message\n\nYou can switch between Plutus Wallet and MetaMask using the dropdown in the top right corner.";
-      } else {
-        botResponse = `I didn't understand that command. Type "help" to see available commands.`;
       }
     } catch (error) {
       console.error("Error handling command:", error);

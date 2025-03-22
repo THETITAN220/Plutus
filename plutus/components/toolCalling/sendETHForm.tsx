@@ -46,24 +46,25 @@ export default function SendETH({ onPaymentSuccess }: SendETHProps) { // Add pro
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center bg-gray-100">
+      <div className="flex flex-col items-center justify-center bg-beige-200">
         <form onSubmit={handleSubmit}>
-          <div className="w-96 bg-black p-8 rounded-lg shadow-lg font-bold">
-            <label className="text-white">Receiver Address</label>
+          <div className="w-96 bg-beige-200 p-8 rounded-lg shadow-lg font-bold">
+            <label className="text-black">Receiver Address</label>
             <input
               value={addr}
               onChange={(e) => setAddr(e.target.value)}
               placeholder="0x....."
               type="text"
-              className="w-full border text-white font-thin border-gray-500 rounded-lg p-2 mt-1 hover:shadow-lg"
+              className="w-full border text-black font-thin border-gray-500 rounded-lg p-2 mt-1 hover:shadow-lg"
             />
 
-            <label className="text-white">Amount</label>
+            <label className="text-black">Amount</label>
             <input
               onChange={(e) => setAmt(e.target.value)}
               value={amt}
               type="text"
-              className="w-full border text-white font-thin border-gray-500 rounded-lg p-2 mt-1 hover:shadow-lg"
+              placeholder="0.001"
+              className="w-full border text-black font-thin border-gray-500 rounded-lg p-2 mt-1 hover:shadow-lg"
             />
 
             <button type="submit" className="w-full bg-orange-600 text-white p-2 mt-2 rounded-lg">
