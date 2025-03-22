@@ -1,56 +1,220 @@
-"use client"
-import { generateWallet, getBalance, restoreWallet } from "@/utils/wallet"
-import { useState, useRef, useEffect } from "react"
-import Head from "next/head"
-import { ethers } from "ethers"
-import axios from "axios"
-import { getStorageItem, setStorageItem, removeStorageItem } from "@/lib/localStorage"
-import ToolDecider from "./ToolDecider"
-import Popup from "./popup"
+"use client";
+import { generateWallet, getBalance, restoreWallet } from "@/utils/wallet";
+import { useState, useRef, useEffect } from "react";
+import Head from "next/head";
+import { ethers } from "ethers";
+import axios from "axios";
+import {
+  getStorageItem,
+  setStorageItem,
+  removeStorageItem,
+} from "@/lib/localStorage";
+import ToolDecider from "./ToolDecider";
+import Popup from "./popup";
+
+// Add Ethereum window type
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: {
+        method: string;
+        params?: Array<string | Record<string, unknown>>;
+      }) => Promise<string>;
+      on: (eventName: string, callback: (params: string[]) => void) => void;
+    };
+  }
+}
+
 type Message = {
-  type: "user" | "bot"
-  text: string
+  type: "user" | "bot";
+  text: string;
+};
+
+// Add interface for transaction data
+interface Transaction {
+  timeStamp: string;
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
 }
 
 type WalletState = {
-  address: string
-  privateKey?: string
-  mnemonic?: string
-  provider?: ethers.BrowserProvider
-  signer?: ethers.JsonRpcSigner
-  type: "default" | "metamask"
-} | null
+  address: string;
+  privateKey?: string;
+  mnemonic?: string;
+  provider?: ethers.BrowserProvider;
+  signer?: ethers.JsonRpcSigner;
+  type: "default" | "metamask";
+} | null;
 
-const STORAGE_KEY = "walletState"
+const STORAGE_KEY = "walletState";
+const METAMASK_STORAGE_KEY = "metamaskWalletState";
 
 export default function Chatbot() {
-  const [input, setInput] = useState("")
+  const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
       type: "bot",
       text: 'Hello! I\'m Plutus, your crypto assistant. I can help you manage an Ethereum wallet. Type "create wallet" to get started.',
     },
-  ])
-  const [toolStatus, setToolStatus] = useState(false)
-  const [walletState, setWalletState] = useState<WalletState>(null)
-  const [toolName, setToolName] = useState("")
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [isPopupOpen, setIsPopupOpen] = useState(false)
+  ]);
+  const [toolStatus, setToolStatus] = useState(false);
+  const [walletState, setWalletState] = useState<WalletState>(null);
+  const [toolName, setToolName] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [selectedWalletType, setSelectedWalletType] = useState<
+    "default" | "metamask"
+  >("default");
 
   useEffect(() => {
-    const storedWalletState = getStorageItem<WalletState>(STORAGE_KEY)
-    if (storedWalletState) {
-      setWalletState(storedWalletState)
-    }
-  }, [])
+    // Load the appropriate wallet based on selected type
+    const loadWallet = async () => {
+      if (selectedWalletType === "default") {
+        const storedWalletState = getStorageItem<WalletState>(STORAGE_KEY);
+        if (storedWalletState) {
+          setWalletState(storedWalletState);
+        }
+      } else if (selectedWalletType === "metamask") {
+        // Check if we have a saved MetaMask wallet
+        const storedMetaMaskState =
+          getStorageItem<WalletState>(METAMASK_STORAGE_KEY);
 
-  const handleWalletImported = (walletDetails) => {
+        if (storedMetaMaskState) {
+          setWalletState(storedMetaMaskState);
+        } else {
+          // Try to connect to MetaMask
+          await connectToMetaMask();
+        }
+      }
+    };
+
+    loadWallet();
+  }, [selectedWalletType]);
+
+  const connectToMetaMask = async () => {
+    try {
+      if (typeof window.ethereum !== "undefined") {
+        // Request account access
+        const accounts = await window.ethereum.request({
+          method: "eth_requestAccounts",
+        });
+
+        if (accounts.length > 0) {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+
+          const metamaskWallet: WalletState = {
+            address: accounts[0],
+            provider: provider,
+            signer: signer,
+            type: "metamask",
+          };
+
+          setWalletState(metamaskWallet);
+          setStorageItem(METAMASK_STORAGE_KEY, metamaskWallet);
+
+          // Listen for account changes
+          window.ethereum.on("accountsChanged", (newAccounts: string[]) => {
+            if (newAccounts.length > 0 && selectedWalletType === "metamask") {
+              connectToMetaMask(); // Reconnect with the new account
+            } else {
+              setWalletState(null);
+              removeStorageItem(METAMASK_STORAGE_KEY);
+            }
+          });
+
+          return true;
+        }
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "bot",
+            text: "MetaMask is not installed. Please install MetaMask to use this feature.",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error connecting to MetaMask:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "bot",
+          text: `Failed to connect to MetaMask: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+        },
+      ]);
+    }
+
+    return false;
+  };
+
+  const handleWalletTypeChange = async (type: "default" | "metamask") => {
+    if (type === selectedWalletType) return; // No change needed
+
+    setSelectedWalletType(type);
+
+    // Save the current wallet if changing away from it
+    if (walletState && walletState.type !== type) {
+      const storageKey =
+        walletState.type === "default" ? STORAGE_KEY : METAMASK_STORAGE_KEY;
+      setStorageItem(storageKey, walletState);
+    }
+
+    // If changing to MetaMask, try to connect if not already connected
+    if (type === "metamask") {
+      const storedMetaMaskState =
+        getStorageItem<WalletState>(METAMASK_STORAGE_KEY);
+      if (!storedMetaMaskState) {
+        const connected = await connectToMetaMask();
+        if (connected) {
+          setMessages((prev) => [
+            ...prev,
+            { type: "bot", text: "Successfully connected to MetaMask!" },
+          ]);
+        }
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { type: "bot", text: "Switched to MetaMask wallet." },
+        ]);
+      }
+    } else {
+      // Switching to Plutus wallet
+      const storedDefaultState = getStorageItem<WalletState>(STORAGE_KEY);
+      if (storedDefaultState) {
+        setWalletState(storedDefaultState);
+        setMessages((prev) => [
+          ...prev,
+          { type: "bot", text: "Switched to Plutus wallet." },
+        ]);
+      } else {
+        setWalletState(null);
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "bot",
+            text: "No Plutus wallet found. Use 'create wallet' to create one.",
+          },
+        ]);
+      }
+    }
+  };
+
+  const handleWalletImported = (walletDetails: WalletState) => {
+    if (!walletDetails) return;
+
     setWalletState(walletDetails);
     setMessages((prev) => [
       ...prev,
       {
         type: "bot",
-        text: `Wallet imported!\nAddress: ${walletDetails.address}\nPrivate Key: ${"***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***"}`,
+        text: `Wallet imported!\nAddress: ${
+          walletDetails.address
+        }\nPrivate Key: ${"***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***"}`,
       },
     ]);
     setIsPopupOpen(false); // Close the popup
@@ -67,37 +231,54 @@ export default function Chatbot() {
   const [transcribing, setTranscribing] = useState(false);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     if (walletState) {
-      setStorageItem(STORAGE_KEY, walletState)
+      const storageKey =
+        walletState.type === "default" ? STORAGE_KEY : METAMASK_STORAGE_KEY;
+      setStorageItem(storageKey, walletState);
     } else {
-      removeStorageItem(STORAGE_KEY)
+      // Only remove the storage for the current wallet type
+      if (selectedWalletType === "default") {
+        removeStorageItem(STORAGE_KEY);
+      } else {
+        removeStorageItem(METAMASK_STORAGE_KEY);
+      }
     }
-  }, [walletState]);
-  // In your fetchTransactions function, replace it with this:
+  }, [walletState, selectedWalletType]);
 
   const fetchTransactions = async () => {
     if (!walletState?.address) {
-      setMessages((prev) => [...prev, { type: "bot", text: "Please create or import a wallet first." }]);
+      setMessages((prev) => [
+        ...prev,
+        { type: "bot", text: "Please create or import a wallet first." },
+      ]);
       return;
     }
 
     try {
-      const response = await axios.get(`/api/transactions?address=${walletState.address}`);
+      // For both wallet types, use the same API to fetch transactions
+      const response = await axios.get(
+        `/api/transactions?address=${walletState.address}`
+      );
       const transactions = response.data.result;
 
       if (transactions.length === 0) {
-        setMessages((prev) => [...prev, { type: "bot", text: "No transactions found." }]);
+        setMessages((prev) => [
+          ...prev,
+          { type: "bot", text: "No transactions found." },
+        ]);
       } else {
-        let message = "Recent Transactions:\n";
-        transactions.slice(0, 5).forEach((tx, index) => {
+        let message = `Recent Transactions (${
+          walletState.type === "metamask" ? "MetaMask" : "Plutus"
+        } Wallet):\n`;
+        transactions.slice(0, 5).forEach((tx: Transaction, index: number) => {
           // Format the value manually since ethers is not available
           // Convert from wei (10^18) to ETH
           const valueInWei = BigInt(tx.value);
@@ -117,177 +298,248 @@ export default function Chatbot() {
       }
     } catch (error) {
       console.error("Error fetching transactions:", error);
-      setMessages((prev) => [...prev, { type: "bot", text: "Failed to fetch transactions: " + (error instanceof Error ? error.message : "Unknown error") }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "bot",
+          text:
+            "Failed to fetch transactions: " +
+            (error instanceof Error ? error.message : "Unknown error"),
+        },
+      ]);
     }
   };
 
   const handleCommand = async (command: string) => {
-
-    setMessages((prev) => [...prev, { type: "user", text: command }])
-    const intent = await axios.post("api/intent", { value: command })
+    setMessages((prev) => [...prev, { type: "user", text: command }]);
+    const intent = await axios.post("api/intent", { value: command });
     console.log("Front resp: ", intent.data);
     const parsedIntent = JSON.parse(intent.data).intent;
     console.log("Parsed resp: ", parsedIntent);
 
-    const ifTool = await axios.post("api/iftool", { value: command, intent: intent.data })
+    const ifTool = await axios.post("api/iftool", {
+      value: command,
+      intent: intent.data,
+    });
 
-    console.log("If tool needed:", ifTool)
+    console.log("If tool needed:", ifTool);
 
-    const boolTool = ifTool.data
+    const boolTool = ifTool.data;
 
-    console.log("Tool:", boolTool)
+    console.log("Tool:", boolTool);
 
     if (boolTool.detectTool == true) {
-      const callTool = await axios.post("api/tools", { value: command })
+      const callTool = await axios.post("api/tools", { value: command });
       // const calltool = JSON.stringify(callTool.data);
-      console.log("Called tool: ", callTool.data.tool)
-      console.log("Called tool: ", typeof callTool.data.tool)
+      console.log("Called tool: ", callTool.data.tool);
+      console.log("Called tool: ", typeof callTool.data.tool);
 
-      setToolName(callTool.data.tool)
-      setToolStatus(true)
-      setIsPopupOpen(true)
+      setToolName(callTool.data.tool);
+      setToolStatus(true);
+      setIsPopupOpen(true);
     }
 
     if (parsedIntent === "General Query") {
       const qRes = await axios.post("api/llm", { value: command });
-      console.log("qRes type: ", typeof (qRes.data));
-      setMessages((prev) => [...prev, { type: "bot", text: qRes.data }])
+      console.log("qRes type: ", typeof qRes.data);
+      setMessages((prev) => [...prev, { type: "bot", text: qRes.data }]);
     }
 
-
-    let botResponse = ""
-    const lowerCommand = command.toLowerCase()
+    let botResponse = "";
+    const lowerCommand = command.toLowerCase();
 
     try {
       // Handle different commands
-      if (lowerCommand.includes("create wallet") || lowerCommand.includes("new wallet")) {
+      if (
+        lowerCommand.includes("create wallet") ||
+        lowerCommand.includes("new wallet")
+      ) {
         try {
-          const walletData = await generateWallet()
+          const walletData = await generateWallet();
 
           if (walletData && walletData.address) {
             setWalletState({
               address: walletData.address,
               privateKey: walletData.privateKey,
               type: "default",
-            })
+            });
 
-            botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!`
+            botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!`;
           } else {
-            botResponse = "Failed to create wallet: Unknown error"
+            botResponse = "Failed to create wallet: Unknown error";
           }
         } catch (error) {
-          botResponse = `Failed to create wallet: ${error instanceof Error ? error.message : "Unknown error"}`
+          botResponse = `Failed to create wallet: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`;
         }
-      } else if (lowerCommand.includes("import wallet") && lowerCommand.includes("key")) {
+      } else if (
+        lowerCommand.includes("import wallet") &&
+        lowerCommand.includes("key")
+      ) {
         // Extract private key - very basic implementation
-        const keyMatch = command.match(/key\s+([0-9a-fx]+)/i)
+        const keyMatch = command.match(/key\s+([0-9a-fx]+)/i);
         if (!keyMatch || !keyMatch[1]) {
-          botResponse = "Please provide a private key in the format: import wallet key YOUR_PRIVATE_KEY"
+          botResponse =
+            "Please provide a private key in the format: import wallet key YOUR_PRIVATE_KEY";
         } else {
-          const privateKey = keyMatch[1]
-          const maskedPrivateKey = "***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***";
+          const privateKey = keyMatch[1];
+          const maskedPrivateKey =
+            "***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***";
           setMessages((prev) =>
             prev.map((msg) =>
               msg.type === "user" && msg.text.includes(privateKey)
-                ? { type: "user", text: msg.text.replace(privateKey, maskedPrivateKey) }
+                ? {
+                    type: "user",
+                    text: msg.text.replace(privateKey, maskedPrivateKey),
+                  }
                 : msg
             )
           );
           try {
-            const walletData = await restoreWallet(privateKey)
+            const walletData = await restoreWallet(privateKey);
 
             if (walletData && walletData.address) {
               setWalletState({
                 address: walletData.address,
                 privateKey: privateKey,
                 type: "default",
-              })
+              });
 
-              botResponse = `Wallet imported!\nAddress: ${walletData.address}\nPrivate Key: ${"***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***"}`
+              botResponse = `Wallet imported!\nAddress: ${
+                walletData.address
+              }\nPrivate Key: ${"***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***"}`;
             } else {
-              botResponse = "Failed to import wallet: Invalid private key"
+              botResponse = "Failed to import wallet: Invalid private key";
             }
           } catch (error) {
-            botResponse = `Failed to import wallet: ${error instanceof Error ? error.message : "Unknown error"}`
+            botResponse = `Failed to import wallet: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`;
           }
         }
-      } else if (lowerCommand.includes("balance") || lowerCommand.includes("how much")) {
+      } else if (
+        lowerCommand.includes("balance") ||
+        lowerCommand.includes("how much")
+      ) {
         if (!walletState?.address) {
-          botResponse = "Please create or import a wallet first."
+          botResponse = "Please create or import a wallet first.";
         } else {
           try {
-            const balanceData = await getBalance(walletState.address)
+            let balanceData;
+
+            if (walletState.type === "metamask" && walletState.provider) {
+              // Use the provider from metamask
+              const balance = await walletState.provider.getBalance(
+                walletState.address
+              );
+              balanceData = ethers.formatEther(balance);
+            } else {
+              // Use the default getBalance utility
+              balanceData = await getBalance(walletState.address);
+            }
 
             if (balanceData !== undefined) {
-              botResponse = `Current balance: ${balanceData} ETH`
+              botResponse = `Current balance: ${balanceData} ETH`;
             } else {
-              botResponse = "Failed to get balance: Unknown error"
+              botResponse = "Failed to get balance: Unknown error";
             }
           } catch (error) {
-            botResponse = `Failed to get balance: ${error instanceof Error ? error.message : "Unknown error"}`
+            botResponse = `Failed to get balance: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`;
           }
         }
-      } else if (lowerCommand.includes("send") || lowerCommand.includes("transfer")) {
-        if (!walletState?.address || !walletState?.privateKey) {
-          botResponse = "Please create or import a wallet first."
+      } else if (
+        lowerCommand.includes("send") ||
+        lowerCommand.includes("transfer")
+      ) {
+        if (!walletState?.address) {
+          botResponse = "Please create or import a wallet first.";
         } else {
           // Very basic parsing - in a real app, use a more robust approach
-          const toMatch = command.match(/to\s+(0x[a-f0-9]{40})/i)
-          const amountMatch = command.match(/(\d+\.?\d*)\s*eth/i)
+          const toMatch = command.match(/to\s+(0x[a-f0-9]{40})/i);
+          const amountMatch = command.match(/(\d+\.?\d*)\s*eth/i);
 
           if (!toMatch || !amountMatch) {
-            botResponse = "Please specify recipient and amount in the format: send 0.1 ETH to 0x..."
+            botResponse =
+              "Please specify recipient and amount in the format: send 0.1 ETH to 0x...";
           } else {
-            const to = toMatch[1]
-            const amount = amountMatch[1]
+            const to = toMatch[1];
+            const amount = amountMatch[1];
 
             try {
-              const response = await fetch("/api/sendTx", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  from: walletState.address,
-                  privateKey: walletState.privateKey,
-                  to: to,
-                  amount: amount,
-                }),
-              })
+              if (walletState.type === "metamask") {
+                // Use MetaMask's built-in transaction flow
+                if (window.ethereum) {
+                  const amountInWei = ethers.parseEther(amount);
+                  const transactionParameters = {
+                    to: to,
+                    from: walletState.address,
+                    value: `0x${amountInWei.toString(16)}`,
+                  };
 
-              const result = await response.json()
+                  const txHash = await window.ethereum.request({
+                    method: "eth_sendTransaction",
+                    params: [transactionParameters],
+                  });
 
-              if (result.success) {
-                botResponse = `Transaction sent!\nAmount: ${amount} ETH\nTo: ${to}\nTransaction Hash: ${result.txHash}`
+                  botResponse = `Transaction sent via MetaMask!\nAmount: ${amount} ETH\nTo: ${to}\nTransaction Hash: ${txHash}`;
+                } else {
+                  botResponse =
+                    "MetaMask is not available. Please install or unlock MetaMask.";
+                }
               } else {
-                botResponse = `Failed to send transaction: ${result.error || "Unknown error"}`
+                // Use the existing API for Plutus wallet transactions
+                const response = await fetch("/api/sendTx", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    from: walletState.address,
+                    privateKey: walletState.privateKey,
+                    to: to,
+                    amount: amount,
+                  }),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                  botResponse = `Transaction sent!\nAmount: ${amount} ETH\nTo: ${to}\nTransaction Hash: ${result.txHash}`;
+                } else {
+                  botResponse = `Failed to send transaction: ${
+                    result.error || "Unknown error"
+                  }`;
+                }
               }
             } catch (error) {
-              botResponse = `Failed to send transaction: ${error instanceof Error ? error.message : "Unknown error"}`
+              botResponse = `Failed to send transaction: ${
+                error instanceof Error ? error.message : "Unknown error"
+              }`;
             }
           }
         }
-      } else if (lowerCommand.includes("transactions") || lowerCommand.includes("history")) {
+      } else if (
+        lowerCommand.includes("transactions") ||
+        lowerCommand.includes("history")
+      ) {
         await fetchTransactions();
-      }
-
-
-
-
-      else if (lowerCommand.includes("help")) {
+      } else if (lowerCommand.includes("help")) {
         botResponse =
-          "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message"
+          "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message\n\nYou can switch between Plutus Wallet and MetaMask using the dropdown in the top right corner.";
       } else {
-        botResponse = `I didn't understand that command. Type "help" to see available commands.`
+        botResponse = `I didn't understand that command. Type "help" to see available commands.`;
       }
     } catch (error) {
-      console.error("Error handling command:", error)
-      botResponse = "Something went wrong. Please try again."
+      console.error("Error handling command:", error);
+      botResponse = "Something went wrong. Please try again.";
     }
 
     // Add bot response
-    setMessages((prev) => [...prev, { type: "bot", text: botResponse }])
+    setMessages((prev) => [...prev, { type: "bot", text: botResponse }]);
 
     // Clear input
-    setInput('');
+    setInput("");
   };
 
   const startRecording = async () => {
@@ -325,24 +577,30 @@ export default function Chatbot() {
             // Process the recognized text as a command
             handleCommand(data.transcript);
           } else {
-            setMessages(prev => [...prev, {
-              type: 'bot',
-              text: 'Sorry, I couldn\'t understand the audio. Please try again or type your command.'
-            }]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: "bot",
+                text: "Sorry, I couldn't understand the audio. Please try again or type your command.",
+              },
+            ]);
           }
         } catch (error) {
           console.error("Error processing audio:", error);
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            text: 'Sorry, there was an error processing your voice command. Please try again.'
-          }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              type: "bot",
+              text: "Sorry, there was an error processing your voice command. Please try again.",
+            },
+          ]);
         } finally {
           setTranscribing(false);
         }
 
         // Clean up the media stream
         if (stream) {
-          stream.getTracks().forEach(track => track.stop());
+          stream.getTracks().forEach((track) => track.stop());
         }
       };
 
@@ -350,15 +608,21 @@ export default function Chatbot() {
       setIsRecording(true);
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      setMessages(prev => [...prev, {
-        type: 'bot',
-        text: 'Could not access the microphone. Please check your browser permissions and try again.'
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "bot",
+          text: "Could not access the microphone. Please check your browser permissions and try again.",
+        },
+      ]);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
@@ -369,7 +633,11 @@ export default function Chatbot() {
       <Head>
         <title>Plutus | Ethereum Wallet Assistant</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin=""
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
           rel="stylesheet"
@@ -399,31 +667,55 @@ export default function Chatbot() {
               Plutus
             </h1>
           </div>
-          <div className="text-sm text-gray-500">Ethereum Wallet Assistant</div>
+
+          <div className="flex items-center">
+            <select
+              className="mr-4 bg-white border border-orange-200 text-gray-700 py-2 px-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+              value={selectedWalletType}
+              onChange={(e) =>
+                handleWalletTypeChange(e.target.value as "default" | "metamask")
+              }
+            >
+              <option value="default">Plutus Wallet</option>
+              <option value="metamask">MetaMask</option>
+            </select>
+            <div className="text-sm text-gray-500">
+              Ethereum Wallet Assistant
+            </div>
+          </div>
         </div>
 
         {walletState?.address && (
           <div className="bg-white p-4 rounded-xl shadow-md mb-6 border-l-4 border-orange-500 transition-all hover:shadow-lg">
-            <div className="flex items-center">
-              <div className="mr-3 bg-orange-100 p-2 rounded-full">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-orange-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">ACTIVE WALLET</p>
-                <p className="text-sm font-mono text-gray-800 break-all">{walletState.address}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="mr-3 bg-orange-100 p-2 rounded-full">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 text-orange-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">
+                    ACTIVE WALLET{" "}
+                    {walletState.type === "metamask"
+                      ? "(METAMASK)"
+                      : "(PLUTUS)"}
+                  </p>
+                  <p className="text-sm font-mono text-gray-800 break-all">
+                    {walletState.address}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -452,7 +744,10 @@ export default function Chatbot() {
 
           <div className="flex-grow overflow-y-auto p-4 bg-gradient-to-b from-orange-50/50 to-transparent">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`mb-4 ${msg.type === "user" ? "text-right" : ""}`}>
+              <div
+                key={idx}
+                className={`mb-4 ${msg.type === "user" ? "text-right" : ""}`}
+              >
                 <div className="inline-flex items-start max-w-[80%]">
                   {msg.type === "bot" && (
                     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mr-2 mt-1 shadow-sm flex-shrink-0">
@@ -474,12 +769,15 @@ export default function Chatbot() {
                   )}
 
                   <div
-                    className={`px-4 py-3 rounded-xl shadow-sm ${msg.type === "user"
-                      ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-tr-none"
-                      : "bg-white border border-gray-200 text-gray-800 rounded-tl-none"
-                      }`}
+                    className={`px-4 py-3 rounded-xl shadow-sm ${
+                      msg.type === "user"
+                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-tr-none"
+                        : "bg-white border border-gray-200 text-gray-800 rounded-tl-none"
+                    }`}
                   >
-                    <pre className="whitespace-pre-wrap font-sans text-sm">{msg.text}</pre>
+                    <pre className="whitespace-pre-wrap font-sans text-sm">
+                      {msg.text}
+                    </pre>
                   </div>
 
                   {msg.type === "user" && (
@@ -509,8 +807,8 @@ export default function Chatbot() {
           <div className="border-t p-3 bg-white">
             <form
               onSubmit={(e) => {
-                e.preventDefault()
-                if (input.trim()) handleCommand(input)
+                e.preventDefault();
+                if (input.trim()) handleCommand(input);
               }}
               className="flex"
             >
@@ -548,18 +846,35 @@ export default function Chatbot() {
               <button
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={transcribing}
-                className={`px-4 py-2 rounded-full flex items-center ${isRecording
-                  ? "bg-red-500 text-white"
-                  : transcribing
+                className={`px-4 py-2 rounded-full flex items-center ${
+                  isRecording
+                    ? "bg-red-500 text-white"
+                    : transcribing
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  } transition-all duration-200`}
+                } transition-all duration-200`}
               >
                 {transcribing ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-5 w-5 text-gray-500"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     Processing audio...
                   </>
@@ -576,9 +891,10 @@ export default function Chatbot() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d={isRecording
-                          ? "M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-                          : "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                        d={
+                          isRecording
+                            ? "M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+                            : "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
                         }
                       />
                     </svg>
@@ -590,8 +906,15 @@ export default function Chatbot() {
           </div>
         </div>
         {/* Tool Popup */}
-        <Popup isOpen={isPopupOpen && toolStatus} onClose={() => setIsPopupOpen(false)}>
-          <ToolDecider tools={toolName} onWalletImported={handleWalletImported} onPaymentSuccess={handlePaymentSuccess}/>
+        <Popup
+          isOpen={isPopupOpen && toolStatus}
+          onClose={() => setIsPopupOpen(false)}
+        >
+          <ToolDecider
+            tools={toolName}
+            onWalletImported={handleWalletImported}
+            onPaymentSuccess={handlePaymentSuccess}
+          />
         </Popup>
 
         <div className="mt-6 bg-white p-3 rounded-xl shadow-sm border border-orange-100">
@@ -612,11 +935,13 @@ export default function Chatbot() {
                 />
               </svg>
             </div>
-            <p>Try saying &quot;create wallet&quot;, &quot;check balance&quot;, or &quot;help&quot; to see all commands</p>
+            <p>
+              Try saying &quot;create wallet&quot;, &quot;check balance&quot;,
+              or &quot;help&quot; to see all commands
+            </p>
           </div>
         </div>
       </main>
     </div>
-  )
+  );
 }
-
