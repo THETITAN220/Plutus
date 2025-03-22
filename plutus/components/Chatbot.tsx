@@ -44,15 +44,8 @@ export default function Chatbot() {
     }
   }, [])
 
-  useEffect(() => {
-    if (walletState) {
-      setStorageItem(STORAGE_KEY, walletState)
-    } else {
-      removeStorageItem(STORAGE_KEY)
-    }
-  }, [walletState]);
-
-
+  
+  
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<BlobPart[]>([]);
@@ -61,11 +54,43 @@ export default function Chatbot() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
-
+  
   useEffect(() => {
     scrollToBottom()
   }, [messages])
-
+  
+  useEffect(() => {
+    if (walletState) {
+      setStorageItem(STORAGE_KEY, walletState)
+    } else {
+      removeStorageItem(STORAGE_KEY)
+    }
+  }, [walletState]);
+  const fetchTransactions = async () => {
+    if (!walletState?.address) {
+      setMessages((prev) => [...prev, { type: "bot", text: "Please create or import a wallet first." }]);
+      return;
+    }
+  
+    try {
+      const response = await axios.get(`/api/transactions?address=${walletState.address}`);
+      const transactions = response.data.result;
+  
+      if (transactions.length === 0) {
+        setMessages((prev) => [...prev, { type: "bot", text: "No transactions found." }]);
+      } else {
+        let message = "Recent Transactions:\n";
+        transactions.slice(0, 5).forEach((tx, index) => {
+          message += `#${index + 1} Tx: ${tx.hash}\nFrom: ${tx.from}\nTo: ${tx.to}\nValue: ${ethers.utils.formatEther(tx.value)} ETH\n\n`;
+        });
+  
+        setMessages((prev) => [...prev, { type: "bot", text: message }]);
+      }
+    } catch (error) {
+      setMessages((prev) => [...prev, { type: "bot", text: "Failed to fetch transactions." }]);
+    }
+  };
+  
   const handleCommand = async (command: string) => {
 
     setMessages((prev) => [...prev, { type: "user", text: command }])
@@ -207,7 +232,14 @@ export default function Chatbot() {
             }
           }
         }
-      } else if (lowerCommand.includes("help")) {
+      }else if (lowerCommand.includes("transactions") || lowerCommand.includes("history")) {
+        await fetchTransactions();
+      }
+      
+      
+      
+      
+      else if (lowerCommand.includes("help")) {
         botResponse =
           "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message"
       } else {
