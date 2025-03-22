@@ -168,10 +168,12 @@ export default function Chatbot() {
             setWalletState({
               address: walletData.address,
               privateKey: walletData.privateKey,
+              mnemonic: walletData.mnemonic,
               type: "default",
             })
 
-            botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!`
+            botResponse = `New wallet created!\nAddress: ${walletData.address}\nPrivate Key: ${walletData.privateKey}\n\nWARNING: Save your private key securely. It will not be shown again!` +
+              `The mnemonics are : ${walletData.mnemonic}`
           } else {
             botResponse = "Failed to create wallet: Unknown error"
           }
@@ -591,7 +593,7 @@ export default function Chatbot() {
         </div>
         {/* Tool Popup */}
         <Popup isOpen={isPopupOpen && toolStatus} onClose={() => setIsPopupOpen(false)}>
-          <ToolDecider tools={toolName} onWalletImported={handleWalletImported} onPaymentSuccess={handlePaymentSuccess}/>
+          <ToolDecider tools={toolName} onWalletImported={handleWalletImported} onPaymentSuccess={handlePaymentSuccess} />
         </Popup>
 
         <div className="mt-6 bg-white p-3 rounded-xl shadow-sm border border-orange-100">
