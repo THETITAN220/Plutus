@@ -44,8 +44,8 @@ export default function Chatbot() {
     }
   }, [])
 
-  
-  
+
+
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<BlobPart[]>([]);
@@ -54,11 +54,11 @@ export default function Chatbot() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
-  
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
-  
+
   useEffect(() => {
     if (walletState) {
       setStorageItem(STORAGE_KEY, walletState)
@@ -66,46 +66,46 @@ export default function Chatbot() {
       removeStorageItem(STORAGE_KEY)
     }
   }, [walletState]);
- // In your fetchTransactions function, replace it with this:
+  // In your fetchTransactions function, replace it with this:
 
-const fetchTransactions = async () => {
-  if (!walletState?.address) {
-    setMessages((prev) => [...prev, { type: "bot", text: "Please create or import a wallet first." }]);
-    return;
-  }
-
-  try {
-    const response = await axios.get(`/api/transactions?address=${walletState.address}`);
-    const transactions = response.data.result;
-
-    if (transactions.length === 0) {
-      setMessages((prev) => [...prev, { type: "bot", text: "No transactions found." }]);
-    } else {
-      let message = "Recent Transactions:\n";
-      transactions.slice(0, 5).forEach((tx, index) => {
-        // Format the value manually since ethers is not available
-        // Convert from wei (10^18) to ETH
-        const valueInWei = BigInt(tx.value);
-        const valueInEth = Number(valueInWei) / 1000000000000000000;
-        
-        // Format the timestamp to a readable date
-        const date = new Date(Number(tx.timeStamp) * 1000).toLocaleString();
-        
-        message += `#${index + 1} [${date}]\n`;
-        message += `Tx: ${tx.hash}\n`;
-        message += `From: ${tx.from}\n`;
-        message += `To: ${tx.to}\n`;
-        message += `Value: ${valueInEth.toFixed(6)} ETH\n\n`;
-      });
-
-      setMessages((prev) => [...prev, { type: "bot", text: message }]);
+  const fetchTransactions = async () => {
+    if (!walletState?.address) {
+      setMessages((prev) => [...prev, { type: "bot", text: "Please create or import a wallet first." }]);
+      return;
     }
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    setMessages((prev) => [...prev, { type: "bot", text: "Failed to fetch transactions: " + (error instanceof Error ? error.message : "Unknown error") }]);
-  }
-};
-  
+
+    try {
+      const response = await axios.get(`/api/transactions?address=${walletState.address}`);
+      const transactions = response.data.result;
+
+      if (transactions.length === 0) {
+        setMessages((prev) => [...prev, { type: "bot", text: "No transactions found." }]);
+      } else {
+        let message = "Recent Transactions:\n";
+        transactions.slice(0, 5).forEach((tx, index) => {
+          // Format the value manually since ethers is not available
+          // Convert from wei (10^18) to ETH
+          const valueInWei = BigInt(tx.value);
+          const valueInEth = Number(valueInWei) / 1000000000000000000;
+
+          // Format the timestamp to a readable date
+          const date = new Date(Number(tx.timeStamp) * 1000).toLocaleString();
+
+          message += `#${index + 1} [${date}]\n`;
+          message += `Tx: ${tx.hash}\n`;
+          message += `From: ${tx.from}\n`;
+          message += `To: ${tx.to}\n`;
+          message += `Value: ${valueInEth.toFixed(6)} ETH\n\n`;
+        });
+
+        setMessages((prev) => [...prev, { type: "bot", text: message }]);
+      }
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      setMessages((prev) => [...prev, { type: "bot", text: "Failed to fetch transactions: " + (error instanceof Error ? error.message : "Unknown error") }]);
+    }
+  };
+
   const handleCommand = async (command: string) => {
 
     setMessages((prev) => [...prev, { type: "user", text: command }])
@@ -138,7 +138,7 @@ const fetchTransactions = async () => {
       console.log("qRes type: ", typeof (qRes.data));
       setMessages((prev) => [...prev, { type: "bot", text: qRes.data }])
     }
-    
+
 
     let botResponse = ""
     const lowerCommand = command.toLowerCase()
@@ -170,7 +170,14 @@ const fetchTransactions = async () => {
           botResponse = "Please provide a private key in the format: import wallet key YOUR_PRIVATE_KEY"
         } else {
           const privateKey = keyMatch[1]
-
+          const maskedPrivateKey = "***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***";
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.type === "user" && msg.text.includes(privateKey)
+                ? { type: "user", text: msg.text.replace(privateKey, maskedPrivateKey) }
+                : msg
+            )
+          );
           try {
             const walletData = await restoreWallet(privateKey)
 
@@ -181,7 +188,7 @@ const fetchTransactions = async () => {
                 type: "default",
               })
 
-              botResponse = `Wallet imported!\nAddress: ${walletData.address}`
+              botResponse = `Wallet imported!\nAddress: ${walletData.address}\nPrivate Key: ${"***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***"}`
             } else {
               botResponse = "Failed to import wallet: Invalid private key"
             }
@@ -243,13 +250,13 @@ const fetchTransactions = async () => {
             }
           }
         }
-      }else if (lowerCommand.includes("transactions") || lowerCommand.includes("history")) {
+      } else if (lowerCommand.includes("transactions") || lowerCommand.includes("history")) {
         await fetchTransactions();
       }
-      
-      
-      
-      
+
+
+
+
       else if (lowerCommand.includes("help")) {
         botResponse =
           "Available commands:\n- create wallet: Create a new Ethereum wallet\n- import wallet key YOUR_PRIVATE_KEY: Import an existing wallet\n- balance: Check your wallet balance\n- send 0.1 ETH to 0xADDRESS: Send Ethereum\n- help: Show this help message"
