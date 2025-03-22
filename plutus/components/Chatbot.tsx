@@ -44,7 +44,22 @@ export default function Chatbot() {
     }
   }, [])
 
+  const handleWalletImported = (walletDetails) => {
+    setWalletState(walletDetails);
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "bot",
+        text: `Wallet imported!\nAddress: ${walletDetails.address}\nPrivate Key: ${"***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***"}`,
+      },
+    ]);
+    setIsPopupOpen(false); // Close the popup
+  };
 
+  const handlePaymentSuccess = (message: string) => {
+    setMessages((prev) => [...prev, { type: "bot", text: message }]);
+    setIsPopupOpen(false); // Close the popup
+  };
 
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -576,7 +591,7 @@ export default function Chatbot() {
         </div>
         {/* Tool Popup */}
         <Popup isOpen={isPopupOpen && toolStatus} onClose={() => setIsPopupOpen(false)}>
-          <ToolDecider tools={toolName} />
+          <ToolDecider tools={toolName} onWalletImported={handleWalletImported} onPaymentSuccess={handlePaymentSuccess}/>
         </Popup>
 
         <div className="mt-6 bg-white p-3 rounded-xl shadow-sm border border-orange-100">

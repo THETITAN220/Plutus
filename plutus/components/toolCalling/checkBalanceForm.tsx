@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { getBalance } from "@/utils/wallet"
 
 interface CheckBalanceFormProps {
   onSubmit: (accountNumber: string) => void
@@ -13,7 +14,8 @@ const CheckBalanceForm: React.FC<CheckBalanceFormProps> = ({ onSubmit }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(accountNumber)
+    const balRes = getBalance(accountNumber)
+    console.log("Balance: ", balRes)
   }
 
   return (

@@ -5,10 +5,8 @@ import provider from "@/utils/provider";
 
 export async function POST(req: NextRequest) {
   try {
-    // Get transaction details from request
     const { from, privateKey, to, amount } = await req.json();
 
-    // Validate input data
     if (!privateKey || !to || !amount) {
       return NextResponse.json(
         { success: false, error: "Missing required parameters" },
@@ -16,7 +14,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create wallet instance from private key
     const wallet = new ethers.Wallet(privateKey, provider);
 
     // Verify the sender address matches the wallet address

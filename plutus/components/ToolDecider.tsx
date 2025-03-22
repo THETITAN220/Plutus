@@ -1,8 +1,14 @@
+import { on } from "node:events";
 import CheckBalanceForm from "./toolCalling/checkBalanceForm";
 import ImportWalletForm from "./toolCalling/importWalletForm";
 import SendETHForm from "./toolCalling/sendETHForm";
 
-export default function ToolDecider({ tools }) {
+interface ToolDeciderProps {
+  tools: string;
+  onPaymentSuccess: (message: string) => void;
+}
+
+export default function ToolDecider({ tools, onWalletImported, onPaymentSuccess }) {
   console.log("inprop", tools);
 
   switch (tools) {
@@ -15,13 +21,13 @@ export default function ToolDecider({ tools }) {
     case "ImportWallet":
       return (
         <div>
-          <ImportWalletForm />
+          <ImportWalletForm onWalletImported={onWalletImported} />
         </div>
       );
     default:
       return (
         <div>
-          <SendETHForm />
+          <SendETHForm onPaymentSuccess={onPaymentSuccess}/>
         </div>
       );
   }

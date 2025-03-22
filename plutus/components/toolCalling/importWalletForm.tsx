@@ -2,33 +2,35 @@
 import { restoreWallet } from "@/utils/wallet"
 import { useState } from "react"
 
-const ImportWalletForm = () => {
+const ImportWalletForm = ({ onWalletImported }) => {
   const [privateKey, setPrivateKey] = useState("")
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-    try{
-    const import_response = await restoreWallet(privateKey);
-    if (import_response && import_response.address) {
-      const walletDetails = {
-        address: import_response.address,
-        privateKey: import_response.privateKey,
-        type: "default",
-      };
-        return walletDetails.address;
+    try {
+      const import_response = await restoreWallet(privateKey);
+      if (import_response && import_response.address) {
+        const walletDetails = {
+          address: import_response.address,
+          privateKey: privateKey,
+          type: "default",
+        };
+
+        onWalletImported(walletDetails);
+      } else {
+        console.error("Invalid Private Key");
+      }
+    } catch (error) {
+      console.error(error);
     }
-}
-    catch(error)
-    {
-        console.error(error)
-    }
-  }
+  };
 
   return (
     <div className="flex flex-col items-center justify-center bg-gray-100">
       <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
         <h2 className="block text-gray-700 text-sm font-bold mb-2">Import Wallet</h2>
-        <form>
+        <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="privateKey">
               Private Key:
@@ -51,10 +53,10 @@ const ImportWalletForm = () => {
             </button>
           </div>
           <div>
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="privateKey">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="privateKey">
               Public Key:
             </label>
-            <input type="text" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"readOnly>
+            <input type="text" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" readOnly>
             </input>
           </div>
         </form>
