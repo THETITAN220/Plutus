@@ -138,11 +138,7 @@ const fetchTransactions = async () => {
       console.log("qRes type: ", typeof (qRes.data));
       setMessages((prev) => [...prev, { type: "bot", text: qRes.data }])
     }
-    if (parsedIntent === "Transaction History") {
-      const tRes = await axios.post("api/llm", { value: command });
-      console.log("qRes type: ", typeof (tRes.data));
-      setMessages((prev) => [...prev, { type: "bot", text: tRes.data }])
-    }
+    
 
     let botResponse = ""
     const lowerCommand = command.toLowerCase()
