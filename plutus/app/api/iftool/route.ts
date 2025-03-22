@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const keyPattern = /<key>\s*\w+/i;
   const hasKeys = keyPattern.test(value);
   console.log(JSON.parse(intent))
-  const isGen = JSON.parse(intent).intent === "General Query";
+  const isGen = JSON.parse(intent).intent === "General Query" || JSON.parse(intent).intent === "Transaction History";
   console.log("Is gen: ", isGen);
 
   const enhancedValue = `Determine if a tool is needed based on the presence of key variables (like private keys) in the following query: "${value}" Do not do a tool calling if its a general query.`;

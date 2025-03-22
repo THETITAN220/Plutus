@@ -5,12 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 const genAI = new GoogleGenerativeAI(process.env.FLASH_API_KEY);
 
 const schema = {
-  description: "List of user intent: classify it into Want transaction, Check balance, Import wallet, Crypto Trends, General Query",
+  description: "List of user intent: classify it into Want transaction, Check balance, Import wallet, Crypto Trends, General Query, Transaction History",
   type: SchemaType.OBJECT,
   properties: {
     intent: {
       type: SchemaType.STRING,
-      description: "Display the intent of the user, only return Want transaction, Check balance, Import wallet, General Query and Crypto Trends",
+      description: "Display the intent of the user, only return Want transaction, Check balance, Import wallet, General Query, Transaction History and Crypto Trends",
       nullable: false,
     },
   },
